@@ -1,4 +1,4 @@
-package wegagenbanksc.com.TransactionCsvFile.repository;
+package wegagenbanksc.com.TransactionCsvFile.repository.primary;
 
 
 import org.springframework.data.jpa.repository.JpaRepository;
