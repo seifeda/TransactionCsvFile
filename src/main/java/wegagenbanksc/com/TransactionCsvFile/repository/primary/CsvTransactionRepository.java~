@@ -1,0 +1,28 @@
+package wegagenbanksc.com.TransactionCsvFile.repository.primary;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
+import wegagenbanksc.com.TransactionCsvFile.DTO.FilteredDataForATARequestDTO;
+import wegagenbanksc.com.TransactionCsvFile.model.TransactionRecord;
+
+import java.util.List;
+
+public interface CsvTransactionRepository extends JpaRepository<TransactionRecord, Long> {
+
+    @Query("SELECT new wegagenbanksc.com.TransactionCsvFile.DTO.FilteredDataForATARequestDTO(" +
+            "t.transactionId, " +
+            "'0000053730101', " + // static debit account
+            "t.accountNumber, " +
+            "t.amount, " +
+            "t.reason) " +
+            "FROM TransactionRecord t WHERE t.status = 'Pending'")
+    List<FilteredDataForATARequestDTO> getPendingATARequests();
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE TransactionRecord t SET t.status = 'Processed' WHERE t.transactionId = :transactionId")
+    void markAsProcessed(@Param("transactionId") String transactionId);
+}
