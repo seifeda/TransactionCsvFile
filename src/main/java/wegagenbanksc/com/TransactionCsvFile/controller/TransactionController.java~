@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/csv")
+//@RequestMapping("/api/csv")
 public class TransactionController {
 
     @Autowired
@@ -31,7 +31,7 @@ public class TransactionController {
             @ApiResponse(responseCode = "200", description = "CSV uploaded successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid input")
     })
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/api/csv/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 
     public ResponseEntity<?> uploadCsv(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {

@@ -1,0 +1,20 @@
+package wegagenbanksc.com.TransactionCsvFile.DTO;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+public class UploadResultDto {
+    private String transactionId;
+    private String status; // VALID / INVALID
+    private String message;
+
+    public UploadResultDto(String transactionId, String status, String message) {
+        this.transactionId = transactionId;
+        this.status = status;
+        this.message = message;
+    }
+
+    // Getters & Setters
+}

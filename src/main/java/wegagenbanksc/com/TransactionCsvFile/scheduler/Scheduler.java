@@ -13,6 +13,6 @@ public class Scheduler {
     private ATARequestService ataRequestService;
     @Scheduled(fixedRate = 60000)
     public void run() {
-        ataRequestService.processPendingRecords();
+       // ataRequestService.processPendingRecords();
     }
 }

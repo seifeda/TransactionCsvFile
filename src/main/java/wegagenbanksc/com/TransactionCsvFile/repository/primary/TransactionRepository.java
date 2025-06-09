@@ -7,4 +7,5 @@ import wegagenbanksc.com.TransactionCsvFile.model.TransactionRecord;
 
 @Repository
 public interface TransactionRepository extends JpaRepository<TransactionRecord, String> {
+    boolean existsByTransactionId(String transactionId);
 }

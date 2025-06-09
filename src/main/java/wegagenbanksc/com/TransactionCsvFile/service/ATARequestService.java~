@@ -1,22 +1,33 @@
 package wegagenbanksc.com.TransactionCsvFile.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.json.JSONObject;
 import org.json.XML;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import wegagenbanksc.com.TransactionCsvFile.DTO.FilteredDataForATARequestDTO;
 import wegagenbanksc.com.TransactionCsvFile.repository.primary.AllInOneRepo;
 import wegagenbanksc.com.TransactionCsvFile.repository.primary.CsvTransactionRepository;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ATARequestService {
@@ -42,7 +53,7 @@ public class ATARequestService {
         final String MODULE_ID = "RT";
         final String SERVICE = "FCUBSRTService";
         final String OPERATION = "CreateTransaction";
-        final String PRD = "EBWW";
+        final String PRD = "FTUS";
         final String CCY = "ETB";
         final String BRANCH_CODE = "002";
 
@@ -76,7 +87,7 @@ public class ATARequestService {
                 .append("          <fcub:TXNACC>").append(dto.getDebitAccount()).append("</fcub:TXNACC>\n")
                 .append("          <fcub:TXNCCY>").append(CCY).append("</fcub:TXNCCY>\n")
                 .append("          <fcub:TXNAMT>").append(dto.getAmount()).append("</fcub:TXNAMT>\n")
-                .append("          <fcub:OFFSETBRN>").append(creditBranch).append("</fcub:OFFSETBRN>\n")
+                .append("          <fcub:OFFSETBRN>").append(BRANCH_CODE).append("</fcub:OFFSETBRN>\n")
                 .append("          <fcub:OFFSETACC>").append(dto.getCreditAccount()).append("</fcub:OFFSETACC>\n")
                 .append("          <fcub:OFFSETCCY>").append(CCY).append("</fcub:OFFSETCCY>\n")
                 .append("          <fcub:OFFSETAMT>").append(dto.getAmount()).append("</fcub:OFFSETAMT>\n")
@@ -96,66 +107,432 @@ public class ATARequestService {
         return date.format(formatter);
     }
 
-    public String sendSoapRequest(String soapXML) throws IOException {
-        URL url = new URL(serviceURLFromEnv);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+//    public String sendSoapRequest(String soapXML) throws IOException {
+//        String serviceUrl = serviceURLFromEnv;
+//        URL url = new URL(serviceUrl);
+//        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+//
+//        // Setup HTTP request
+//        connection.setRequestMethod("POST");
+//        connection.setRequestProperty("Content-Type", "text/xml;charset=UTF-8");
+//        //connection.setRequestProperty("SOAPAction", "http:10.57.40.173:7008/FCUBSRTService/FCUBSRTService/CreateTransactionFS");
+//        connection.setRequestProperty("SOAPAction", serviceURLFromEnv);
+//        connection.setDoOutput(true);
+//
+//        // Send SOAP request
+//        connection.getOutputStream().write(soapXML.getBytes());
+//
+//        // Get SOAP response
+//        InputStream inputStream = connection.getInputStream();
+//        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+//        byte[] buffer = new byte[1024];
+//        int bytesRead;
+//        while ((bytesRead = inputStream.read(buffer)) != -1) {
+//            outputStream.write(buffer, 0, bytesRead);
+//        }
+//        inputStream.close();
+//
+//        // Convert response to string
+//
+//        String rawXml = outputStream.toString("UTF-8");
+//        JSONObject json = XML.toJSONObject(rawXml);
+//        JSONObject envelope = json.getJSONObject("S:Envelope");
+//        JSONObject body = envelope.getJSONObject("S:Body");
+//        JSONObject createTransactionRes = body.getJSONObject("CREATETRANSACTION_FSFS_RES");
+//        JSONObject header = createTransactionRes.getJSONObject("FCUBS_HEADER");
+//        JSONObject bodyContent = createTransactionRes.getJSONObject("FCUBS_BODY");
+//        String msgStat = header.getString("MSGSTAT");
+//        JSONObject errorResp = bodyContent.getJSONObject("FCUBS_ERROR_RESP");
+//
+//        // Print or return as needed
+//        System.out.println("MSGSTAT: " + msgStat);
+//        System.out.println("FCUBS_ERROR_RESP: " + errorResp.toString(2)); // Pretty print
+//
+//        return errorResp.toString(2);
+//    }
+public Map<String, String> sendSoapRequest(String soapXML) throws IOException {
+    String serviceUrl = serviceURLFromEnv;
+    URL url = new URL(serviceUrl);
+    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 
-        connection.setRequestMethod("POST");
-        connection.setRequestProperty("Content-Type", "text/xml;charset=UTF-8");
-        connection.setRequestProperty("SOAPAction", "http://fcubs.ofss.com/service/FCUBSRTService/CreateTransaction");
-        connection.setDoOutput(true);
+    // Setup HTTP request
+    connection.setRequestMethod("POST");
+    connection.setRequestProperty("Content-Type", "text/xml;charset=UTF-8");
+    connection.setRequestProperty("SOAPAction", serviceURLFromEnv);
+    connection.setDoOutput(true);
 
-        connection.getOutputStream().write(soapXML.getBytes());
+    // Send SOAP request
+    connection.getOutputStream().write(soapXML.getBytes());
 
-        int status = connection.getResponseCode();
-        InputStream inputStream;
-
-        if (status >= 200 && status < 300) {
-            inputStream = connection.getInputStream();
-        } else {
-            inputStream = connection.getErrorStream();
-            if (inputStream == null) throw new IOException("Received HTTP error: " + status);
-        }
-
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int bytesRead;
-        while ((bytesRead = inputStream.read(buffer)) != -1) {
-            outputStream.write(buffer, 0, bytesRead);
-        }
-        inputStream.close();
-
-        String response = outputStream.toString("UTF-8");
-
-        System.out.println("📥 SOAP Response:");
-        System.out.println(response);
-
-        return response;
+    // Get SOAP response
+    InputStream inputStream = connection.getInputStream();
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    byte[] buffer = new byte[1024];
+    int bytesRead;
+    while ((bytesRead = inputStream.read(buffer)) != -1) {
+        outputStream.write(buffer, 0, bytesRead);
     }
+    inputStream.close();
+
+    String rawXml = outputStream.toString("UTF-8");
+    System.out.println("Raw SOAP Response:\n" + rawXml);
+
+    Map<String, String> resultMap = new HashMap<>();
+    resultMap.put("rawXml", rawXml);
+
+    try {
+        // Use org.json.XML to parse XML
+        JSONObject json = XML.toJSONObject(rawXml);
+
+        JSONObject body = json.getJSONObject("S:Envelope").getJSONObject("S:Body");
+
+        // Since the namespace is present, we must loop through keys to find the actual node
+        String responseKey = null;
+        for (String key : body.keySet()) {
+            if (key.contains("CREATETRANSACTION_FSFS_RES")) {
+                responseKey = key;
+                break;
+            }
+        }
+
+        if (responseKey == null) {
+            resultMap.put("status", "FAILED");
+            resultMap.put("message", "CREATETRANSACTION_FSFS_RES node not found in the response.");
+            return resultMap;
+        }
+
+        JSONObject responseNode = body.getJSONObject(responseKey);
+        JSONObject header = responseNode.getJSONObject("FCUBS_HEADER");
+        String msgStat = header.getString("MSGSTAT");
+        resultMap.put("status", msgStat);
+
+        // Try to read error message if present
+        if ("FAILURE".equalsIgnoreCase(msgStat)) {
+            JSONObject bodyContent = responseNode.getJSONObject("FCUBS_BODY");
+
+            if (bodyContent.has("FCUBS_ERROR_RESP")) {
+                JSONObject errorResp = bodyContent.getJSONObject("FCUBS_ERROR_RESP");
+                if (errorResp.has("ERROR")) {
+                    JSONObject error = errorResp.getJSONObject("ERROR");
+                    String eCode = error.optString("ECODE", "UNKNOWN");
+                    String eDesc = error.optString("EDESC", "No description");
+                    resultMap.put("message", "Error [" + eCode + "]: " + eDesc);
+                } else {
+                    resultMap.put("message", "Unknown failure: No ERROR block.");
+                }
+            } else {
+                resultMap.put("message", "FAILURE with no error details.");
+            }
+        } else {
+            resultMap.put("message", "Transaction processed successfully.");
+        }
+
+    } catch (Exception e) {
+        resultMap.put("status", "FAILED");
+        resultMap.put("message", "Exception while parsing response: " + e.getMessage());
+    }
+
+    return resultMap;
+}
+
+//    public String sendSoapRequest(String soapXML) throws IOException {
+//    String serviceUrl = serviceURLFromEnv;
+//    URL url = new URL(serviceUrl);
+//    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+//
+//    // Setup HTTP request
+//    connection.setRequestMethod("POST");
+//    connection.setRequestProperty("Content-Type", "text/xml;charset=UTF-8");
+//    connection.setRequestProperty("SOAPAction", serviceURLFromEnv);
+//    connection.setDoOutput(true);
+//
+//    // Send SOAP request
+//    connection.getOutputStream().write(soapXML.getBytes());
+//
+//    // Read the SOAP response
+//    InputStream inputStream = connection.getInputStream();
+//    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+//    byte[] buffer = new byte[1024];
+//    int bytesRead;
+//    while ((bytesRead = inputStream.read(buffer)) != -1) {
+//        outputStream.write(buffer, 0, bytesRead);
+//    }
+//    inputStream.close();
+//
+//    // Convert response to string
+//    String rawXml = outputStream.toString("UTF-8");
+//
+//    // Log or debug the raw SOAP response
+//    System.out.println("Raw SOAP Response:\n" + rawXml);
+//
+//    // Wrap raw SOAP response in JSON string with summary info
+//    JSONObject responseSummary = new JSONObject();
+//    responseSummary.put("rawXml", rawXml);
+//
+//    try {
+//        JSONObject json = XML.toJSONObject(rawXml);
+//        JSONObject envelope = json.getJSONObject("S:Envelope");
+//        JSONObject body = envelope.getJSONObject("S:Body");
+//
+//        if (!body.has("CREATETRANSACTION_FSFS_RES")) {
+//            responseSummary.put("status", "FAILED");
+//            responseSummary.put("message", "CREATETRANSACTION_FSFS_RES node not found in the response.");
+//            return responseSummary.toString(2);
+//        }
+//
+//        JSONObject createTransactionRes = body.getJSONObject("CREATETRANSACTION_FSFS_RES");
+//        JSONObject header = createTransactionRes.getJSONObject("FCUBS_HEADER");
+//        JSONObject bodyContent = createTransactionRes.getJSONObject("FCUBS_BODY");
+//
+//        String msgStat = header.optString("MSGSTAT", "UNKNOWN");
+//        responseSummary.put("status", msgStat);
+//
+//        if ("SUCCESS".equalsIgnoreCase(msgStat)) {
+//            responseSummary.put("message", "Transaction processed successfully.");
+//        } else {
+//            JSONObject errorResp = bodyContent.optJSONObject("FCUBS_ERROR_RESP");
+//            if (errorResp != null) {
+//                JSONObject error = errorResp.optJSONObject("ERROR");
+//                if (error != null) {
+//                    String ecode = error.optString("ECODE");
+//                    String edesc = error.optString("EDESC");
+//                    responseSummary.put("message", String.format("Error [%s]: %s", ecode, edesc));
+//                } else {
+//                    responseSummary.put("message", "Transaction failed. No error detail found.");
+//                }
+//            } else {
+//                responseSummary.put("message", "Transaction failed. FCUBS_ERROR_RESP missing.");
+//            }
+//        }
+//
+//    } catch (Exception e) {
+//        responseSummary.put("status", "FAILED");
+//        responseSummary.put("message", "Exception during response parsing: " + e.getMessage());
+//    }
+//
+//    return responseSummary.toString(2);
+//}
+
 
     public String convertSoapToJSON(String soapXml) {
         JSONObject jsonObj = XML.toJSONObject(soapXml);
         return jsonObj.toString(2); // Pretty print with indent
     }
-
-    public void processPendingRecords() {
+//    public List<Map<String, String>> processPendingRecords() {
+//        List<Map<String, String>> responseList = new ArrayList<>();
+//        List<FilteredDataForATARequestDTO> pendingRecords = csvTransactionRepository.getPendingATARequests();
+//
+//        for (FilteredDataForATARequestDTO dto : pendingRecords) {
+//            Map<String, String> result = new HashMap<>();
+//            result.put("transactionId", dto.getTransactionId());
+//
+//            try {
+//                String soapRequest = requestXMLCreator(dto);
+//
+//                Map<String, String> soapResponse  = sendSoapRequest(soapRequest);
+//                System.out.println("Raw SOAP Response: \n" + soapResponse);
+//
+//                String json = convertSoapToJSON(soapResponse);
+//                System.out.println("Converted JSON: \n" + json);
+//
+//                ObjectMapper objectMapper = new ObjectMapper();
+//                JsonNode rootNode = objectMapper.readTree(json);
+//
+//                JsonNode envelopeNode = rootNode.path("S:Envelope");
+//                JsonNode bodyWrapper = envelopeNode.path("S:Body");
+//                JsonNode responseNode = bodyWrapper.path("CREATETRANSACTION_FSFS_RES");
+//
+//                if (responseNode.isMissingNode()) {
+//                    result.put("status", "failure");
+//                    result.put("message", "CREATETRANSACTION_FSFS_RES node not found in the response.");
+//                    responseList.add(result);
+//                    continue;
+//                }
+//
+//                JsonNode headerNode = responseNode.path("FCUBS_HEADER");
+//                JsonNode bodyNode = responseNode.path("FCUBS_BODY");
+//
+//                String msgStat = headerNode.path("MSGSTAT").asText("");
+//                JsonNode errorNode = bodyNode.path("FCUBS_ERROR_RESP").path("ERROR");
+//
+//                if ("SUCCESS".equalsIgnoreCase(msgStat)) {
+//                    csvTransactionRepository.markAsProcessed(dto.getTransactionId());
+//                    result.put("status", "success");
+//                    result.put("message", "Transaction processed successfully.");
+//                } else {
+//                    result.put("status", "failure");
+//
+//                    if (!errorNode.isMissingNode()) {
+//                        String ecode = errorNode.path("ECODE").asText();
+//                        String edesc = errorNode.path("EDESC").asText();
+//                        result.put("message", String.format("Error [%s]: %s", ecode, edesc));
+//                    } else {
+//                        result.put("message", "Transaction failed. No error detail found.");
+//                    }
+//                }
+//
+//            } catch (Exception e) {
+//                result.put("status", "failure");
+//                result.put("message", "Exception: " + e.getMessage());
+//            }
+//
+//            responseList.add(result);
+//        }
+//
+//        return responseList;
+//    }
+    public List<Map<String, String>> processPendingRecords() {
+        List<Map<String, String>> responseList = new ArrayList<>();
         List<FilteredDataForATARequestDTO> pendingRecords = csvTransactionRepository.getPendingATARequests();
 
         for (FilteredDataForATARequestDTO dto : pendingRecords) {
+            Map<String, String> result = new HashMap<>();
+            result.put("transactionId", dto.getTransactionId());
+
             try {
                 String soapRequest = requestXMLCreator(dto);
-                String soapResponse = sendSoapRequest(soapRequest);
-                String json = convertSoapToJSON(soapResponse);
 
-                System.out.println("✅ Transaction " + dto.getTransactionId() + " processed.");
-                System.out.println("🔁 JSON Response: " + json);
+                Map<String, String> soapResponse = sendSoapRequest(soapRequest);
+                String rawXml = soapResponse.get("rawXml");
 
-                csvTransactionRepository.markAsProcessed(dto.getTransactionId());
+                System.out.println("Raw SOAP Response: \n" + rawXml);
+
+                // Use XML parsing instead of converting to JSON
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                factory.setNamespaceAware(true);
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                Document doc = builder.parse(new InputSource(new StringReader(rawXml)));
+
+                NodeList msgStatNodes = doc.getElementsByTagNameNS("*", "MSGSTAT");
+                String msgStat = msgStatNodes.getLength() > 0 ? msgStatNodes.item(0).getTextContent() : "";
+
+                if ("SUCCESS".equalsIgnoreCase(msgStat)) {
+                    csvTransactionRepository.markAsProcessed(dto.getTransactionId());
+                    result.put("status", "success");
+                    result.put("message", "Transaction processed successfully.");
+                } else {
+                    result.put("status", "failure");
+
+                    NodeList errorCodeNodes = doc.getElementsByTagNameNS("*", "ECODE");
+                    NodeList errorDescNodes = doc.getElementsByTagNameNS("*", "EDESC");
+
+                    if (errorCodeNodes.getLength() > 0 && errorDescNodes.getLength() > 0) {
+                        String ecode = errorCodeNodes.item(0).getTextContent();
+                        String edesc = errorDescNodes.item(0).getTextContent();
+                        result.put("message", String.format("Error [%s]: %s", ecode, edesc));
+                    } else {
+                        result.put("message", "Transaction failed. No error detail found.");
+                    }
+                }
 
             } catch (Exception e) {
-                System.err.println("❌ Failed to process transaction ID: " + dto.getTransactionId());
-                e.printStackTrace();
+                result.put("status", "failure");
+                result.put("message", "Exception: " + e.getMessage());
             }
+
+            responseList.add(result);
         }
+
+        return responseList;
     }
+
+//    public List<Map<String, String>> processPendingRecords() {
+//        List<Map<String, String>> responseList = new ArrayList<>();
+//        List<FilteredDataForATARequestDTO> pendingRecords = csvTransactionRepository.getPendingATARequests();
+//
+//        for (FilteredDataForATARequestDTO dto : pendingRecords) {
+//            Map<String, String> result = new HashMap<>();
+//            result.put("transactionId", dto.getTransactionId());
+//
+//            try {
+//                String soapRequest = requestXMLCreator(dto);
+//                String soapResponse = sendSoapRequest(soapRequest);
+//                System.out.println("Raw SOAP Response: \n" + soapResponse);
+//
+//                String json = convertSoapToJSON(soapResponse);
+//                System.out.println("Converted JSON: \n" + json);
+//
+//                ObjectMapper objectMapper = new ObjectMapper();
+//                JsonNode rootNode = objectMapper.readTree(json);
+//
+//                JsonNode bodyNode = rootNode.get("S:Envelope").get("S:Body").get("CREATETRANSACTION_FSFS_RES");
+//
+//                // FCUBS_HEADER
+//                JsonNode headerNode = bodyNode.get("FCUBS_HEADER");
+//                String msgStat = headerNode.path("MSGSTAT").asText();
+//
+//                // FCUBS_ERROR_RESP
+//                JsonNode fcubsBodyNode = bodyNode.get("FCUBS_BODY");
+//                JsonNode errorNode = fcubsBodyNode.path("FCUBS_ERROR_RESP").path("ERROR");
+//
+//                if ("SUCCESS".equalsIgnoreCase(msgStat)) {
+//                    csvTransactionRepository.markAsProcessed(dto.getTransactionId());
+//                    result.put("status", "success");
+//                    result.put("message", "Transaction processed successfully.");
+//                } else {
+//                    result.put("status", "failure");
+//
+//                    if (!errorNode.isMissingNode()) {
+//                        String ecode = errorNode.path("ECODE").asText();
+//                        String edesc = errorNode.path("EDESC").asText();
+//                        result.put("message", String.format("Error [%s]: %s", ecode, edesc));
+//                    } else {
+//                        result.put("message", "Transaction failed. Error details missing.");
+//                    }
+//                }
+//
+//            } catch (Exception e) {
+//                result.put("status", "failure");
+//                result.put("message", "Exception: " + e.getMessage());
+//            }
+//            System.out.println(result);
+//            responseList.add(result);
+//        }
+//
+//        return responseList;
+//    }
+
+
+//    public void processPendingRecords() {
+//        List<FilteredDataForATARequestDTO> pendingRecords = csvTransactionRepository.getPendingATARequests();
+//
+//        for (FilteredDataForATARequestDTO dto : pendingRecords) {
+//            try {
+//                String soapRequest = requestXMLCreator(dto);
+//                System.out.println("✅ soapRequest for transaction " + soapRequest  + " processed.");
+//                String soapResponse = sendSoapRequest(soapRequest);
+//                System.out.println("✅ Response for soaprequest  " + soapResponse + " processed.");
+//
+//                String json = convertSoapToJSON(soapResponse);
+//
+//               // System.out.println("✅ Transaction " + dto.getTransactionId() + " processed.");
+//                System.out.println("🔁 convert to JSON the sope envelope Response: " + json);
+//
+//                try {
+//                    ObjectMapper objectMapper = new ObjectMapper();
+//                    JsonNode rootNode = objectMapper.readTree(json);
+//
+//                    JsonNode msgStatNode = rootNode
+//                            .path("S:Envelope")
+//                            .path("S:Body")
+//                            .path("CREATETRANSACTION_FSFS_RES")
+//                            .path("FCUBS_HEADER")
+//                            .path("MSGSTAT");
+//
+//                    if (msgStatNode.asText().equalsIgnoreCase("SUCCESS")) {
+//                        csvTransactionRepository.markAsProcessed(dto.getTransactionId());
+//                    }
+//                } catch (Exception e) {
+//                    e.printStackTrace(); // handle JSON parse exception
+//                }
+//
+//
+//
+//
+//            } catch (Exception e) {
+//                System.err.println("❌ Failed to process transaction ID: " + dto.getTransactionId());
+//                e.printStackTrace();
+//            }
+//        }
+//    }
 }
